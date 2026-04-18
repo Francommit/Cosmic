@@ -599,10 +599,9 @@ public class PacketCreator {
      */
     public static Packet getHello(short mapleVersion, InitializationVector sendIv, InitializationVector recvIv) {
         OutPacket p = new ByteBufOutPacket();
-        p.writeShort(0x0E);
+        p.writeShort(0x0E); // 14 bytes length in LE
         p.writeShort(mapleVersion);
-        p.writeShort(1);
-        p.writeByte(49);
+        p.writeString("1");
         p.writeBytes(recvIv.getBytes());
         p.writeBytes(sendIv.getBytes());
         p.writeByte(8);

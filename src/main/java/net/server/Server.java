@@ -36,6 +36,7 @@ import constants.game.GameConstants;
 import constants.inventory.ItemConstants;
 import constants.net.OpcodeConstants;
 import constants.net.ServerConstants;
+import database.DatabaseMigrations;
 import database.note.NoteDao;
 import net.ChannelDependencies;
 import net.PacketProcessor;
@@ -74,6 +75,8 @@ import service.NoteService;
 import tools.DatabaseConnection;
 import tools.Pair;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -322,10 +325,34 @@ public class Server {
         String remoteIp = client.getRemoteAddress();
 
         String[] hostAddress = getIP(world, channel).split(":");
+
         if (IpAddresses.isLocalAddress(remoteIp)) {
             hostAddress[0] = YamlConfig.config.server.LOCALHOST;
-        } else if (IpAddresses.isLanAddress(remoteIp)) {
-            hostAddress[0] = YamlConfig.config.server.LANHOST;
+        } else {
+            // If the client is connecting from LAN/WAN, but our config says 127.0.0.1 or 0.0.0.0
+            // we should probably give them the address they used to connect to us (or our local LAN IP)
+            // instead of literally 127.0.0.1 which would point to their own machine.
+            if (hostAddress[0].equals("127.0.0.1") || hostAddress[0].equals("localhost") || hostAddress[0].equals("0.0.0.0")) {
+                try {
+                    // Try to get the IP the server is known by on the host
+                    String localIp = InetAddress.getLocalHost().getHostAddress();
+                    if (localIp != null && !localIp.equals("127.0.0.1") && !localIp.startsWith("172.")) {
+                        hostAddress[0] = localIp;
+                    } else {
+                        // If we are in docker, getLocalHost() often returns 127.0.0.1 or the 172.x internal IP.
+                        // We might need to ask the user for their LAN IP if this still fails,
+                        // but let's try to detect it from the network interfaces.
+                        hostAddress[0] = YamlConfig.config.server.HOST;
+                        if (hostAddress[0].equals("0.0.0.0")) {
+                            hostAddress[0] = "127.0.0.1"; // Fallback to loopback if nothing else works
+                        }
+                    }
+                } catch (UnknownHostException e) {
+                    hostAddress[0] = YamlConfig.config.server.HOST;
+                }
+            } else if (IpAddresses.isLanAddress(remoteIp)) {
+                hostAddress[0] = YamlConfig.config.server.LANHOST;
+            }
         }
 
         try {
@@ -872,7 +899,7 @@ public class Server {
             throw new IllegalStateException("Failed to initiate a connection to the database");
         }
 
-//        DatabaseMigrations.runDatabaseMigrations();
+        DatabaseMigrations.runDatabaseMigrations();
 
         channelDependencies = registerChannelDependencies();
 

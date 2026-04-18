@@ -55,6 +55,11 @@ public class ByteBufOutPacket implements OutPacket {
     }
 
     @Override
+    public void writeShortBE(int value) {
+        byteBuf.writeShort(value);
+    }
+
+    @Override
     public void writeInt(int value) {
         byteBuf.writeIntLE(value);
     }
