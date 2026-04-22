@@ -3,6 +3,10 @@ package net.encryption;
 public class InitializationVector {
     private final byte[] bytes;
 
+    public static InitializationVector of(byte[] bytes) {
+        return new InitializationVector(bytes);
+    }
+
     private InitializationVector(byte[] bytes) {
         this.bytes = bytes;
     }

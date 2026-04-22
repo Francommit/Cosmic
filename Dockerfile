@@ -43,6 +43,6 @@ COPY config.yaml ./
 # This exposes the login server, and channels.
 # Format for channels: WWCC, where WW is 75 plus the world number and CC is 75 plus the channel number (both zero indexed).
 EXPOSE 8484 7575 7576 7577
-ENTRYPOINT ["java", "-jar", "./Server.jar"]
+ENTRYPOINT ["java", "--add-opens=java.base/sun.misc=ALL-UNNAMED", "-jar", "./Server.jar"]
 
 

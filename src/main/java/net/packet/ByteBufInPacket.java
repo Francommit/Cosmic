@@ -4,10 +4,15 @@ import constants.string.CharsetConstants;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 
+import io.netty.buffer.Unpooled;
 import java.awt.*;
 
 public class ByteBufInPacket implements InPacket {
     private final ByteBuf byteBuf;
+
+    public ByteBufInPacket(byte[] bytes) {
+        this(Unpooled.wrappedBuffer(bytes));
+    }
 
     public ByteBufInPacket(ByteBuf byteBuf) {
         this.byteBuf = byteBuf;
