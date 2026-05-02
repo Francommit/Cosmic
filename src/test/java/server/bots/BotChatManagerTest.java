@@ -1,6 +1,7 @@
 package server.bots;
 
 import client.Character;
+import client.Job;
 import org.junit.jupiter.api.Test;
 import server.maps.FieldLimit;
 import server.maps.MapleMap;
@@ -11,6 +12,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -41,6 +43,53 @@ class BotChatManagerTest {
     @Test
     void shouldStillParseNamedItemTrades() {
         assertEquals("name:chaos scroll", BotChatManager.matchTradeCategory("trade chaos scroll"));
+        assertEquals("name:chaos scroll", BotChatManager.matchTradeCategory("trade chaos scrolls"));
+    }
+
+    @Test
+    void shouldParseViewEquipmentRequestsAsTradeCommands() {
+        assertEquals("name:hat", BotChatManager.matchTradeCategory("show me your hat"));
+        assertEquals("name:ring 2", BotChatManager.matchTradeCategory("let me see ur ring 2"));
+        assertEquals("name:weapon", BotChatManager.matchTradeCategory("can i c yo weapon"));
+    }
+
+    @Test
+    void shouldParseFollowTargetCommandsWithoutBreakingPlainFollow() {
+        assertEquals("clawer", BotChatManager.matchFollowTarget("follow clawer"));
+        assertEquals("Clawer", BotChatManager.matchFollowTarget("follow Clawer please"));
+        assertNull(BotChatManager.matchFollowTarget("follow me"));
+        assertNull(BotChatManager.matchFollowTarget("follow here"));
+    }
+
+    @Test
+    void shouldOnlyMatchMovementModeCommandsAsWholeCommands() {
+        assertTrue(BotChatManager.isMoveHereCommand("here"));
+        assertTrue(BotChatManager.isMoveHereCommand("move here!"));
+        assertFalse(BotChatManager.isMoveHereCommand("some random chat message here"));
+
+        assertTrue(BotChatManager.isGrindCommand("farm"));
+        assertTrue(BotChatManager.isGrindCommand("go grind"));
+        assertFalse(BotChatManager.isGrindCommand("Im going to the farm today"));
+
+        assertTrue(BotChatManager.isFarmHereCommand("farm here"));
+        assertTrue(BotChatManager.isFarmHereCommand("grind here please"));
+        assertFalse(BotChatManager.isFarmHereCommand("Im going to farm here today"));
+
+        assertTrue(BotChatManager.isFarmHereCommand("sentry"));
+        assertTrue(BotChatManager.isFarmHereCommand("go sentry"));
+        assertTrue(BotChatManager.isFarmHereCommand("sentry here"));
+        assertTrue(BotChatManager.isFarmHereCommand("sentry mode"));
+        assertTrue(BotChatManager.isFarmHereCommand("go sentry mode"));
+        assertTrue(BotChatManager.isFarmHereCommand("camp"));
+        assertTrue(BotChatManager.isFarmHereCommand("camp here"));
+        assertTrue(BotChatManager.isFarmHereCommand("guard mode"));
+        assertTrue(BotChatManager.isFarmHereCommand("go defend mode"));
+        assertTrue(BotChatManager.isFarmHereCommand("post up"));
+        assertTrue(BotChatManager.isFarmHereCommand("post up here"));
+        assertTrue(BotChatManager.isFarmHereCommand("anchor here"));
+        assertTrue(BotChatManager.isFarmHereCommand("anchor"));
+        assertFalse(BotChatManager.isFarmHereCommand("Im going to camp today"));
+        assertFalse(BotChatManager.isFarmHereCommand("setting up camp"));
     }
 
     @Test
@@ -133,6 +182,19 @@ class BotChatManagerTest {
     }
 
     @Test
+    void shouldShowBuffDebugStateWithEnabledAndMode() {
+        BotEntry entry = new BotEntry(null, null, null);
+
+        entry.buffConsumablesEnabled = true;
+        entry.buffCheapMode = true;
+        assertEquals("buff on(cheap)", BotBuffManager.formatDebugState(entry));
+
+        entry.buffConsumablesEnabled = false;
+        entry.buffCheapMode = false;
+        assertEquals("buff off(best)", BotBuffManager.formatDebugState(entry));
+    }
+
+    @Test
     void shouldBuildMovementStatsReportUsingGameStatsAndDerivedPhysics() {
         Character bot = mock(Character.class);
         MapleMap map = mock(MapleMap.class);
@@ -171,6 +233,38 @@ class BotChatManagerTest {
         List<String> report = BotChatManager.buildMovementStatsReport(bot);
 
         assertEquals("speed 100% jump 100% (map forced; raw 140%/125%)", report.getFirst());
+    }
+
+    @Test
+    void shouldBuildPhysicalRangeReportFromEffectiveTotals() {
+        Character bot = mock(Character.class);
+        when(bot.getJob()).thenReturn(Job.FIGHTER);
+        when(bot.getLevel()).thenReturn(48);
+        when(bot.getTotalWatk()).thenReturn(20);
+        when(bot.getTotalDex()).thenReturn(100);
+        when(bot.getTotalLuk()).thenReturn(40);
+        when(bot.calculateMinBaseDamage(20)).thenReturn(50);
+        when(bot.calculateMaxBaseDamage(20)).thenReturn(99);
+
+        String report = BotChatManager.buildRangeReport(bot,
+                new BotEquipManager.MapDamageProfile(100, 40, 48));
+
+        assertEquals("my dmg is 50-99, watk 20, acc 100, hit 47% vs strongest lv48 mob", report);
+    }
+
+    @Test
+    void shouldBuildMageRangeReportFromEffectiveMagicTotals() {
+        Character bot = mock(Character.class);
+        when(bot.getJob()).thenReturn(Job.MAGICIAN);
+        when(bot.getLevel()).thenReturn(50);
+        when(bot.getTotalMagic()).thenReturn(200);
+        when(bot.getTotalInt()).thenReturn(100);
+        when(bot.getTotalLuk()).thenReturn(50);
+
+        String report = BotChatManager.buildRangeReport(bot,
+                new BotEquipManager.MapDamageProfile(100, 30, 50));
+
+        assertEquals("my dmg is 3-9, matk 200, magic acc 75, hit 26% vs strongest lv50 mob", report);
     }
 
     @Test

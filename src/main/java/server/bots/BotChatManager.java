@@ -6,6 +6,8 @@ import client.Skill;
 import client.SkillFactory;
 import client.inventory.InventoryType;
 import client.inventory.Item;
+import client.inventory.WeaponType;
+import constants.game.ExpTable;
 import constants.game.GameConstants;
 import constants.inventory.ItemConstants;
 import server.Trade;
@@ -39,9 +41,17 @@ public class BotChatManager {
             "\\b(follow(\\s+(me|here|pls|please|now))?|come(\\s+(here|to\\s+me|with\\s+me|closer|on|back))?|"
             + "get\\s+over\\s+here|f\\s+me|(pls|please)\\s+follow)\\b",
             Pattern.CASE_INSENSITIVE);
+    private static final Pattern FOLLOW_TARGET_PATTERN = Pattern.compile(
+            "^\\s*follow\\s+(\\S+?)(?:\\s+(?:pls|please|now))?\\s*[?!.,]*\\s*$",
+            Pattern.CASE_INSENSITIVE);
 
     private static final Pattern MOVE_HERE_PATTERN = Pattern.compile(
-            "\\b(move\\s+(here|there)|go\\s+(here|there)|here|move)\\b",
+            "(?:move\\s+(?:here|there)|go\\s+(?:here|there)|here|move)(?:\\s+(?:now|pls|please))?",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern FARM_HERE_PATTERN = Pattern.compile(
+            "(?:(?:farm|grind|hunt|train)\\s+here"
+            + "|(?:go\\s+)?(?:sentry|camp|guard|defend|post\\s+up|anchor)(?:\\s+(?:here|mode))?)"
+            + "(?:\\s+(?:now|pls|please))?",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern STOP_PATTERN = Pattern.compile(
@@ -137,6 +147,10 @@ public class BotChatManager {
             + "|\\bdo\\s+you\\s+(crit|get\\s+crits?)\\b"
             + "|\\bwhat.?s\\s+(your|ur)\\s+crit\\b",
             Pattern.CASE_INSENSITIVE);
+    private static final Pattern POT_DEBUG_PATTERN = Pattern.compile(
+            "\\b(pot|potion|autopot)\\s*(debug|info|select(ion)?|status)\\b"
+            + "|\\bdebug\\s+(pot|potion|autopot)s?\\b",
+            Pattern.CASE_INSENSITIVE);
     private static final Pattern HELP_PATTERN = Pattern.compile(
             "\\b(help|commands?|what\\s+can\\s+you\\s+do|how\\s+do\\s+i\\s+use\\s+you)\\b",
             Pattern.CASE_INSENSITIVE);
@@ -148,6 +162,49 @@ public class BotChatManager {
             "\\brequest\\s*\\?|\\bneed\\s+anything\\b|\\bdo\\s+you\\s+need\\s+(anything|something)\\b"
             + "|\\bwhat\\s+do\\s+you\\s+need\\b|\\bwhat.?s\\s+(on\\s+your\\s+)?wish\\s*list\\b",
             Pattern.CASE_INSENSITIVE);
+    private static final Pattern NEED_HP_POT_PATTERN = Pattern.compile(
+            "\\b(?:need|nned|low\\s+on|out\\s+of|running\\s+low\\s+on)\\s+(?:some\\s+)?(?:hp|health)\\s+(?:pots?|potions?|supplies)\\b"
+            + "|\\b(?:any(?:body|one)?|someone|somebody|u|you)\\s+(?:got|have|has)\\s+(?:any\\s+|some\\s+)?(?:hp|health)\\s+(?:pots?|potions?)\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern NEED_MP_POT_PATTERN = Pattern.compile(
+            "\\b(?:need|nned|low\\s+on|out\\s+of|running\\s+low\\s+on)\\s+(?:some\\s+)?(?:mp|mana)\\s+(?:pots?|potions?|supplies)\\b"
+            + "|\\b(?:any(?:body|one)?|someone|somebody|u|you)\\s+(?:got|have|has)\\s+(?:any\\s+|some\\s+)?(?:mp|mana)\\s+(?:pots?|potions?)\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern NEED_POT_PATTERN = Pattern.compile(
+            "\\b(?:need|nned|low\\s+on|out\\s+of|running\\s+low\\s+on)\\s+(?:some\\s+)?(?:pots?|potions?|supplies)\\b"
+            + "|\\b(?:any(?:body|one)?|someone|somebody|u|you)\\s+(?:got|have|has)\\s+(?:any\\s+|some\\s+)?(?:pots?|potions?|supplies)\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern NEED_AMMO_PATTERN = Pattern.compile(
+            "\\b(?:need|nned|low\\s+on|out\\s+of|running\\s+low\\s+on)\\s+(?:some\\s+)?(?:ammo|arrows?|bolts?)\\b"
+            + "|\\b(?:any(?:body|one)?|someone|somebody|u|you)\\s+(?:got|have|has)\\s+(?:any\\s+|some\\s+)?(?:ammo|arrows?|bolts?)\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final List<String> AMMO_NOT_NEEDED_REPLIES = List.of(
+            "i don't use shareable arrow ammo rn",
+            "i don't need arrows or bolts rn",
+            "ammo sharing is only for arrows and bolts",
+            "not using bow ammo rn");
+    private static final List<String> OWNER_POT_SHORTAGE_REPLIES = List.of(
+            "almost out of %s pots too, i thought u were our shopper?",
+            "i checked, nobody has spare %s pots. that's kinda your department lol",
+            "we're low on %s pots too, boss",
+            "no spare %s pots in the squad rn",
+            "everyone's light on %s pots, might need a shop run",
+            "i'd help, but we're all thin on %s pots",
+            "no one has enough %s pots to share rn",
+            "we're not holding extra %s pots, thought you packed supplies",
+            "can't find spare %s pots. maybe time to restock?",
+            "almost dry on %s pots too, don't look at me");
+    private static final List<String> OWNER_AMMO_SHORTAGE_REPLIES = List.of(
+            "almost out of ammo too, i thought u were our shopper?",
+            "i checked, nobody has spare ammo. that's kinda your department lol",
+            "we're low on ammo too, boss",
+            "no spare ammo in the squad rn",
+            "everyone's light on ammo, might need a shop run",
+            "i'd help, but we're all thin on ammo",
+            "no one has enough ammo to share rn",
+            "we're not holding extra ammo, thought you packed supplies",
+            "can't find spare ammo. maybe time to restock?",
+            "almost dry on ammo too, don't look at me");
     private static final Pattern SUPPORT_ON_PATTERN = Pattern.compile(
             "\\b(support\\s+(me|us|party)|support\\s+on|auto\\s+support)\\b",
             Pattern.CASE_INSENSITIVE);
@@ -176,10 +233,10 @@ public class BotChatManager {
             "\\bbuff\\s+(pots?\\s+)?list\\b|\\bbuffs?\\s*\\?|\\bwhat\\s+buffs?\\b|\\bwhich\\s+buffs?\\b",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern BUFF_DEBUG_PATTERN = Pattern.compile(
-            "\\bbuff\\s+debug\\b|\\bdebug\\s+buffs?\\b|\\bactive\\s+buffs?\\b",
+            "\\bbuffs?\\s*(?:debug|\\?)?\\b|\\bdebug\\s+buffs?\\b|\\bactive\\s+buffs?\\b",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern SKILL_BUFF_DEBUG_PATTERN = Pattern.compile(
-            "\\bskill\\s+buff\\s+debug\\b|\\bdebug\\s+skill\\s+buffs?\\b|\\bskill\\s+buffs?\\s*\\?\\s*$",
+            "\\bskill\\s+buffs?\\s*(?:debug|\\?)?\\b|\\bdebug\\s+skill\\s+buffs?\\b",
             Pattern.CASE_INSENSITIVE);
     private static final String SCROLL_WORDS = "scrolls?";
     private static final String POTION_WORDS = "(?:pots?|potions?|hp\\s+pots?|mp\\s+pots?|supplies)";
@@ -203,6 +260,12 @@ public class BotChatManager {
             +   "\\s+" + POTION_WORDS + "\\b"
             + "|\\b(pots?|potions?)\\s+left\\b",
             Pattern.CASE_INSENSITIVE);
+    private static final Pattern EXP_PATTERN = Pattern.compile(
+            "^\\s*(?:exp|xp|experience)\\s*[?!.,]*\\s*$"
+            + "|\\bhow\\s+much\\s+(?:exp|xp|experience)(?:\\s+do\\s+(?:you|u)\\s+have)?\\b"
+            + "|\\bwhat.?s\\s+(?:your|ur)\\s+(?:exp|xp|experience)\\b"
+            + "|\\b(?:your|ur)\\s+(?:exp|xp|experience)\\b",
+            Pattern.CASE_INSENSITIVE);
     private static final Pattern MESOS_PATTERN = Pattern.compile(
             "^\\s*(?:meso|mesos|cash)\\s*[?!.,]*\\s*$"
             + "|\\bhow\\s+much\\s+(?:meso|mesos|cash)(?:\\s+do\\s+(?:you|u)\\s+have)?\\b"
@@ -216,8 +279,16 @@ public class BotChatManager {
             "\\b(unequip|take\\s+off|remove)\\s+(?:everything|all|all\\s+(?:your|ur|my)\\s+gear|gear|equipment|equips?)\\b"
             + "|\\bstrip\\s+(?:down|everything|all)\\b",
             Pattern.CASE_INSENSITIVE);
+    private static final String EQUIP_SLOT_WORDS =
+            "(?:weapon|wep|shield|offhand|cape|hat|helm(?:et)?|top|shirt|overall|bottom|pants|shoes|boots|"
+            + "gloves?|face(?:\\s*acc(?:essory)?)?|eye(?:\\s*(?:acc(?:essory)?|piece))?|"
+            + "earrings?|rings?\\s*[1-4]?|pendant|medal|belt)";
     private static final Pattern UNEQUIP_SLOT_PATTERN = Pattern.compile(
-            "\\b(unequip|take\\s+off|remove)\\s+(weapon|wep|shield|offhand|cape|hat|helm(?:et)?|top|shirt|bottom|pants|shoes|boots|gloves?|face(?:\\s*acc(?:essory)?)?|eye(?:\\s*(?:acc(?:essory)?|piece))?|rings?\\s*[1-4]?|pendant|medal|belt)\\b",
+            "\\b(unequip|take\\s+off|remove)\\s+(" + EQUIP_SLOT_WORDS + ")\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern TRADE_VIEW_SLOT_COMMAND_PATTERN = Pattern.compile(
+            "\\b(?:can\\s+i\\s+(?:c|see)|let\\s+me\\s+(?:c|see)|show(?:\\s+me)?)\\s+"
+            + "(?:(?:u|ur|yo|your)\\s+)?(" + EQUIP_SLOT_WORDS + ")\\b[?!.,]*\\s*$",
             Pattern.CASE_INSENSITIVE);
 
     // SP variant selection — only matched when spVariantPromptSent=true and spVariant=null
@@ -249,10 +320,10 @@ public class BotChatManager {
 
     // Drop-choice responses (matched only when pendingAction = "item_choice")
     private static final Pattern DROP_CHOICE_DROP_PATTERN = Pattern.compile(
-            "\\b(drop\\s*(it|them|to\\s+ground)?|floor|ground)\\b",
+            "^(?:drop|drop it|drop them|drop to ground|floor|ground)$",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern DROP_CHOICE_TRADE_PATTERN = Pattern.compile(
-            "\\b(trade|trade\\s*me|send|give|transfer|give\\s*me)\\b",
+            "^(?:trade|trade me|send|give|transfer|give me)$",
             Pattern.CASE_INSENSITIVE);
 
     // Shared verb prefix for all drop/give/trade category commands
@@ -350,6 +421,10 @@ public class BotChatManager {
     private static final Pattern ASK_ITEM_COMMAND_PATTERN = Pattern.compile(
             "\\b" + ASK_CMD_VERB + "\\s+" + TRANSFER_RECIPIENT + TRANSFER_OWNER + "(?:(?:your|ur|my)\\s+)?([\\w][\\w '\\-]{1,39})[?!.,]?\\s*$",
             Pattern.CASE_INSENSITIVE);
+    private static final Pattern ITEM_QUERY_PATTERN = Pattern.compile(
+            "^\\s*(?:(?:do\\s+(?:you|u)\\s+have)|(?:(?:any(?:body|one)?|someone|somebody|you|u)\\s+(?:got|have|has))|got|have)\\s+"
+            + "(?:any\\s+|some\\s+)?(?:(?:your|ur)\\s+)?([\\w][\\w '\\-]{1,39})[?!.,]*\\s*$",
+            Pattern.CASE_INSENSITIVE);
     // Inventory slot query
     private static final Pattern INV_SLOTS_PATTERN = Pattern.compile(
             "\\bslots?\\s*(?:left|free|remaining)?\\b"
@@ -367,13 +442,33 @@ public class BotChatManager {
             "\\b(respec\\s+ap|reset\\s+ap|rebuild\\s+ap|fix\\s+ap(?:\\s+build)?)\\b",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern LOGOUT_PATTERN = Pattern.compile(
-            "\\b((save\\s+and\\s+)?log\\s*(off|out)|disconnect|(pls|please)\\s+log(\\s+me)?\\s+(off|out))\\b",
+            "(?:(?:i\\s+)?(?:(?:have|got|need)\\s+to|gotta)\\s+)?"
+            + "(?:(?:save\\s+and\\s+)?log\\s*(?:off|out)|disconnect|log\\s+me\\s+(?:off|out))",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern RELOG_PATTERN = Pattern.compile(
-            "\\b(relog|save\\s+and\\s+relog|reconnect|log\\s+back\\s+in)\\b",
+            "(?:(?:i\\s+)?(?:(?:have|got|need)\\s+to|gotta)\\s+)?"
+            + "(?:relog|save\\s+and\\s+relog|reconnect|log\\s+back\\s+in)",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern AWAY_PATTERN = Pattern.compile(
+            "(?:(?:gtg|g2g)"
+            + "|(?:i\\s+)?(?:(?:have|got|need)\\s+to|gotta)\\s+go"
+            + "|(?:i\\s+)?(?:(?:have|got|gotta|need)\\s+to\\s+)?(?:leave|bounce)"
+            + "|(?:(?:i\\s+am|i['’]?m|im)\\s+)?(?:brb|afk)"
+            + "|(?:be\\s+right\\s+back|back\\s+in\\s+(?:a\\s+)?(?:bit|sec|minute|min))"
+            + "|(?:(?:i\\s+am|i['’]?m|im)\\s+)?(?:off|logging\\s+out\\s+soon)"
+            + "|(?:i\\s+)?(?:have|got|gotta)\\s+to\\s+(?:head\\s+out|run))",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern LOGOUT_CONFIRM_PATTERN = Pattern.compile(
             "\\b(yes|yep|yeah|yea|y|ok|sure|confirm|do\\s+it|go\\s+(ahead|for\\s+it))\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern AWAY_TOWN_CONFIRM_PATTERN = Pattern.compile(
+            "^(?:yes|yep|yeah|yea|y|ok|sure|confirm|town|nearest\\s+town|go\\s+town|go\\s+to\\s+town)$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern AWAY_STAY_CONFIRM_PATTERN = Pattern.compile(
+            "^(?:stay|stay\\s+here|here|idle|wait\\s+here)$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern AWAY_LOGOUT_CONFIRM_PATTERN = Pattern.compile(
+            "^(?:logout|log\\s*out|log\\s*off|disconnect|save\\s+and\\s+log\\s*(?:out|off))$",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern NEGATIVE_CONFIRM_PATTERN = Pattern.compile(
             "\\b(no|nope|nah|nvm|never\\s*mind|dont|don't|not\\s+now|skip)\\b",
@@ -386,6 +481,19 @@ public class BotChatManager {
             "wb", "wb!", "welcome back", "oh ur back", "hey ur back", "welcome back!!",
             "wb~", "there you are", "oh hey", "finally lol", "took ya a bit", "wb lol", "where were you lol", "ready to roll?", "lets continue!",
             "hey you're back", "oh wb!", "been waiting for you", "waiting on you", "ready to go?", "ready?", "back already?", "back?", "u back?");
+    // %s = current map name (bot is in town since the offline-return warp put it there).
+    // Sent via party chat so the owner sees it across maps when they reconnect.
+    private static final List<String> WB_OFFLINE_PARTY_TEMPLATES = List.of(
+            "wb! we've been waiting at %s since u went offline",
+            "yoo wb, chillin at %s for a while now",
+            "back online? we parked at %s",
+            "wb, took a break in %s when u dropped",
+            "hey wb! waiting in %s",
+            "wb!! we're at %s",
+            "yo wb, headed to %s when u afk'd",
+            "oh wb, been camping at %s",
+            "wb~ we're in %s, come grab us",
+            "hey ur back!! we're at %s");
     private static final List<String> MESO_REPLIES = List.of(
             "I have %s",
             "got %s on me",
@@ -417,11 +525,10 @@ public class BotChatManager {
     static void handleChat(BotEntry entry, String message) {
         markOwnerActive(entry);
         // Logout / relog — two-step confirmation
-        if (RELOG_PATTERN.matcher(message).find()) {
+        if (entry.pendingAction == null && matchesWholeCommand(RELOG_PATTERN, message)) {
             BotManager.after(BotManager.randMs(900, 1100), () -> {
                 entry.pendingAction = "relog";
-                entry.following = false;
-                entry.grinding  = false;
+                BotManager.getInstance().issueStop(entry);
                 List<String> prompts = List.of(
                         "relog? say yes to confirm",
                         "save and relog? type yes",
@@ -430,11 +537,10 @@ public class BotChatManager {
             });
             return;
         }
-        if (LOGOUT_PATTERN.matcher(message).find()) {
+        if (entry.pendingAction == null && matchesWholeCommand(LOGOUT_PATTERN, message)) {
             BotManager.after(BotManager.randMs(900, 1100), () -> {
                 entry.pendingAction = "logout";
-                entry.following = false;
-                entry.grinding  = false;
+                BotManager.getInstance().issueStop(entry);
                 List<String> prompts = List.of(
                         "log off? you sure? say yes to confirm",
                         "save and log off? say yes if you're sure",
@@ -443,16 +549,28 @@ public class BotChatManager {
             });
             return;
         }
+        if (entry.pendingAction == null && matchesWholeCommand(AWAY_PATTERN, message)) {
+            if (!BotManager.getInstance().isFirstBotEntry(entry)) {
+                return;
+            }
+            BotManager.after(BotManager.randMs(900, 1100), () -> promptOwnerAway(entry));
+            return;
+        }
         if (entry.pendingAction != null) {
+            if ("owner_away".equals(entry.pendingAction)) {
+                handleOwnerAwayChoice(entry, message);
+                return;
+            }
             // Item-choice: three-way "drop / trade / cancel" — handled independently of yes/no
             if ("item_choice".equals(entry.pendingAction)) {
                 String category = entry.pendingDropCategory;
-                if (DROP_CHOICE_TRADE_PATTERN.matcher(message).find()) {
+                String choice = normalizeCommandText(message);
+                if (DROP_CHOICE_TRADE_PATTERN.matcher(choice).matches()) {
                     entry.pendingAction       = null;
                     entry.pendingDropCategory = null;
                     BotManager.after(BotManager.randMs(400, 600),
                             () -> BotInventoryManager.executeChoice(category, true, entry, entry.bot));
-                } else if (DROP_CHOICE_DROP_PATTERN.matcher(message).find()) {
+                } else if (DROP_CHOICE_DROP_PATTERN.matcher(choice).matches()) {
                     entry.pendingAction       = null;
                     entry.pendingDropCategory = null;
                     BotManager.after(BotManager.randMs(400, 600),
@@ -510,6 +628,22 @@ public class BotChatManager {
 
         if (matchesWholeCommand(HELP_PATTERN, message)) {
             BotManager.after(BotManager.randMs(500, 700), () -> reportHelp(entry));
+            return;
+        }
+        if (NEED_HP_POT_PATTERN.matcher(message).find()) {
+            BotManager.after(BotManager.randMs(500, 700), () -> handleNeedPotionCommand(entry, true));
+            return;
+        }
+        if (NEED_MP_POT_PATTERN.matcher(message).find()) {
+            BotManager.after(BotManager.randMs(500, 700), () -> handleNeedPotionCommand(entry, false));
+            return;
+        }
+        if (NEED_POT_PATTERN.matcher(message).find()) {
+            BotManager.after(BotManager.randMs(500, 700), () -> handleNeedAnyPotionCommand(entry));
+            return;
+        }
+        if (NEED_AMMO_PATTERN.matcher(message).find()) {
+            BotManager.after(BotManager.randMs(500, 700), () -> handleNeedAmmoCommand(entry));
             return;
         }
         if (SUPPORT_OFF_PATTERN.matcher(message).find()) {
@@ -610,52 +744,56 @@ public class BotChatManager {
         }
         if (UNEQUIP_PATTERN.matcher(message).find()) {
             BotManager.after(BotManager.randMs(500, 700), () -> {
-                entry.following = false;
-                entry.grinding = false;
+                BotManager.getInstance().issueStop(entry);
                 BotManager.getInstance().botSay(entry.bot, BotEquipManager.unequipAll(entry.bot));
             });
             return;
         }
 
-        if (MOVE_HERE_PATTERN.matcher(message).find()) {
+        if (isFarmHereCommand(message)) {
             Point dest = entry.owner != null ? new Point(entry.owner.getPosition()) : null;
             if (dest != null) {
                 BotManager.after(BotManager.randMs(1000, 1500), () -> {
-                    entry.following = false;
-                    entry.grinding = false;
-                    entry.moveTarget = dest;
-                    entry.moveTargetPrecise = true;
+                    BotManager.getInstance().issueFarmHere(entry, dest);
                     BotManager.getInstance().botSay(entry.bot, BotManager.randomReply(MOVE_HERE_REPLIES));
                 });
             }
-        } else if (FOLLOW_PATTERN.matcher(message).find()) {
+        } else if (isMoveHereCommand(message)) {
+            Point dest = entry.owner != null ? new Point(entry.owner.getPosition()) : null;
+            if (dest != null) {
+                BotManager.after(BotManager.randMs(1000, 1500), () -> {
+                    BotManager.getInstance().issueMoveTo(entry, dest, true);
+                    BotManager.getInstance().botSay(entry.bot, BotManager.randomReply(MOVE_HERE_REPLIES));
+                });
+            }
+        } else if (isFollowCommand(message)) {
             BotManager.after(BotManager.randMs(1500, 2000), () -> {
-                entry.grinding = false;
-                entry.moveTarget = null;
                 BotEquipManager.autoEquip(entry.bot, entry.owner, entry.pendingLootOfferItem);
+                entry.nextGearSuggestionAt = 0;
+                maybeSuggestGearToSiblings(entry, entry.bot);
                 BotManager.getInstance().botSay(entry.bot, BotManager.randomReply(FOLLOW_REPLIES));
                 BotPotionManager.checkPotShareOnModeStart(entry, entry.bot);
-                BotManager.after(BotManager.randMs(250, 750), () -> entry.following = true);
+                BotManager.after(BotManager.randMs(250, 750), () -> BotManager.getInstance().issueFollowOwner(entry));
             });
-        } else if (GRIND_PATTERN.matcher(message).find()) {
+        } else if (isGrindCommand(message)) {
             BotManager.after(BotManager.randMs(1500, 2000), () -> {
-                entry.following = false;
-                entry.moveTarget = null;
                 BotEquipManager.autoEquip(entry.bot, entry.owner, entry.pendingLootOfferItem);
+                entry.nextGearSuggestionAt = 0;
+                maybeSuggestGearToSiblings(entry, entry.bot);
                 BotPotionManager.setupAutopotForBot(entry.bot);
                 BotManager.getInstance().botSay(entry.bot, BotPotionManager.grindStartMessage(entry.bot));
                 BotPotionManager.checkPotShareOnModeStart(entry, entry.bot);
                 BotManager.after(BotManager.randMs(250, 750), () -> {
-                    entry.grinding = true;
+                    BotManager.getInstance().issueGrind(entry);
                     checkBotStatus(entry, entry.bot);
                 });
             });
-        } else if (STOP_PATTERN.matcher(message).find()) {
+        } else if (isStopCommand(message)) {
             BotManager.after(BotManager.randMs(900, 1100), () -> {
-                entry.following = false;
-                entry.grinding  = false;
-                entry.moveTarget = null;
+                BotManager.getInstance().issueStop(entry);
                 BotEquipManager.autoEquip(entry.bot, entry.owner, entry.pendingLootOfferItem);
+                entry.nextGearSuggestionAt = 0;
+                maybeSuggestGearToSiblings(entry, entry.bot);
                 BotManager.after(BotManager.randMs(1400, 1600), () ->
                         BotManager.getInstance().botSay(entry.bot, BotManager.randomReply(STOP_REPLIES)));
             });
@@ -719,6 +857,12 @@ public class BotChatManager {
             return;
         }
 
+        String queriedItem = matchItemQuery(message);
+        if (queriedItem != null) {
+            handleItemQuery(entry, queriedItem);
+            return;
+        }
+
         // Info commands
         if (matchesWholeCommand(REQUEST_UPGRADE_PATTERN, message)) {
             BotManager.after(BotManager.randMs(500, 700), () -> handleRequestUpgradeCommand(entry, entry.bot));
@@ -744,6 +888,8 @@ public class BotChatManager {
             BotManager.after(BotManager.randMs(900, 1100), () -> reportInventory(entry, entry.bot));
         if (isMesoQuery(message))
             BotManager.after(BotManager.randMs(900, 1100), () -> reportMesos(entry, entry.bot));
+        if (matchesWholeCommand(EXP_PATTERN, message))
+            BotManager.after(BotManager.randMs(900, 1100), () -> reportExp(entry, entry.bot));
         if (matchesWholeCommand(INV_SLOTS_PATTERN, message))
             BotManager.after(BotManager.randMs(900, 1100), () -> reportInventorySlots(entry, entry.bot));
         if (matchesWholeCommand(SCROLLS_PATTERN, message))
@@ -754,6 +900,8 @@ public class BotChatManager {
             BotManager.after(BotManager.randMs(900, 1100), () -> reportDebugStats(entry, entry.bot));
         if (matchesWholeCommand(CRIT_DEBUG_PATTERN, message))
             BotManager.after(BotManager.randMs(900, 1100), () -> reportCritDebug(entry, entry.bot));
+        if (matchesWholeCommand(POT_DEBUG_PATTERN, message))
+            BotManager.after(BotManager.randMs(900, 1100), () -> reportPotDebug(entry, entry.bot));
 
         // Job advancement — check if message contains a valid job selection
         if (JOB_SELECT_PATTERN.matcher(message).find()) {
@@ -769,6 +917,72 @@ public class BotChatManager {
                 BotManager.getInstance().botSay(entry.bot, BotManager.randomReply(replies));
                 BotManager.after(BotManager.randMs(900, 1100), () -> BotStarterKitManager.advanceJob(entry.bot, entry.owner, advJob));
             }
+        }
+    }
+
+    private static void promptOwnerAway(BotEntry entry) {
+        entry.pendingAction = "owner_away";
+        BotManager.getInstance().issueStop(entry);
+        if (BotManager.getInstance().shouldOfferTownForAwayCommand(entry)) {
+            BotManager.getInstance().botSay(entry.bot,
+                    "ok, want us to wait at nearest town or logout? say yes/town or logout");
+        } else {
+            BotManager.getInstance().botSay(entry.bot,
+                    "ok, want us to stay safe here or logout? say yes/stay or logout");
+        }
+    }
+
+    private static void handleOwnerAwayChoice(BotEntry entry, String message) {
+        String choice = normalizeCommandText(message);
+        boolean townOffered = BotManager.getInstance().shouldOfferTownForAwayCommand(entry);
+        entry.pendingAction = null;
+
+        if (AWAY_LOGOUT_CONFIRM_PATTERN.matcher(choice).matches()) {
+            BotManager.after(BotManager.randMs(700, 900), () -> {
+                BotManager.getInstance().botSay(entry.bot, "ok, logging us out");
+                logoutOwnerBots(entry);
+            });
+            return;
+        }
+
+        if (AWAY_TOWN_CONFIRM_PATTERN.matcher(choice).matches()) {
+            int ownerId = entry.owner != null ? entry.owner.getId() : 0;
+            if (ownerId != 0) {
+                BotManager.getInstance().issueOwnerAwaySafeModeForOwner(ownerId, townOffered);
+            }
+            BotManager.after(BotManager.randMs(700, 900), () ->
+                    BotManager.getInstance().botSay(entry.bot, townOffered
+                            ? "ok, heading to town and waiting"
+                            : "ok, staying safe here"));
+            return;
+        }
+
+        if (AWAY_STAY_CONFIRM_PATTERN.matcher(choice).matches() && !townOffered) {
+            int ownerId = entry.owner != null ? entry.owner.getId() : 0;
+            if (ownerId != 0) {
+                BotManager.getInstance().issueOwnerAwaySafeModeForOwner(ownerId, false);
+            }
+            BotManager.after(BotManager.randMs(700, 900), () ->
+                    BotManager.getInstance().botSay(entry.bot, "ok, staying safe here"));
+            return;
+        }
+
+        BotManager.after(BotManager.randMs(700, 900), () ->
+                BotManager.getInstance().botSay(entry.bot, "ok nvm, staying with you"));
+    }
+
+    private static void logoutOwnerBots(BotEntry entry) {
+        Character owner = entry.owner;
+        if (owner == null) {
+            return;
+        }
+
+        for (BotEntry owned : BotManager.getInstance().getBotEntries(owner.getId())) {
+            BotManager.getInstance().issueStop(owned);
+            BotManager.after(BotManager.randMs(1200, 1800), () -> {
+                owned.bot.saveCharToDB(true);
+                owned.bot.getClient().disconnect(false, false);
+            });
         }
     }
 
@@ -835,6 +1049,28 @@ public class BotChatManager {
         }
     }
 
+    /**
+     * Announces the bot's town location via party chat after the owner reconnects
+     * (or revives) following a 5+ min offline-or-dead window during which the bot
+     * scrolled to town. Party chat reaches the owner even if they spawn back into
+     * a different map.
+     */
+    static void announceOwnerReturnedFromOffline(BotEntry entry) {
+        final Character bot = entry.bot;
+        if (bot == null) {
+            return;
+        }
+        String mapName = bot.getMap() != null ? bot.getMap().getMapName() : null;
+        if (mapName == null || mapName.isBlank()) {
+            mapName = "town";
+        }
+        final String text = String.format(BotManager.randomReply(WB_OFFLINE_PARTY_TEMPLATES), mapName);
+        BotManager.after(BotManager.randMs(1500, 2500), () -> {
+            bot.changeFaceExpression(ThreadLocalRandom.current().nextBoolean() ? 2 : 3);
+            BotManager.getInstance().botSayParty(bot, text);
+        });
+    }
+
     /** Detects owner AFK (same position ≥5 min) and says "wb" when they return. */
     static void tickAfkCheck(BotEntry entry, Character owner) {
         Point pos = owner.getPosition();
@@ -871,10 +1107,57 @@ public class BotChatManager {
     }
 
     private static void reportRange(BotEntry entry, Character bot) {
-        int watk   = bot.getTotalWatk();
-        int maxDmg = Math.max(1, bot.calculateMaxBaseDamage(watk));
-        int minDmg = Math.max(1, bot.calculateMinBaseDamage(watk));
-        queueBotSay(entry, String.format("my dmg is %d-%d, watk %d", minDmg, maxDmg, watk));
+        queueBotSay(entry, buildRangeReport(bot));
+    }
+
+    static String buildRangeReport(Character bot) {
+        BotEquipManager.MapDamageProfile dmgProfile = BotEquipManager.MapDamageProfile.snapshot(bot);
+        BotEquipManager.MapDamageProfile hitProfile = BotEquipManager.MapDamageProfile.snapshotByAvoid(bot);
+        return buildRangeReport(bot, dmgProfile, hitProfile);
+    }
+
+    static String buildRangeReport(Character bot, BotEquipManager.MapDamageProfile mobProfile) {
+        return buildRangeReport(bot, mobProfile, mobProfile);
+    }
+
+    private static String buildRangeReport(Character bot, BotEquipManager.MapDamageProfile mobProfile,
+                                           BotEquipManager.MapDamageProfile hitProfile) {
+        CombatFormulaProvider formulas = CombatFormulaProvider.getInstance();
+        boolean magicAttack = BotEquipManager.isMageJob(bot.getJob());
+        int attackStat;
+        int accuracy;
+        int minDmg;
+        int maxDmg;
+        String attackLabel;
+        String accuracyLabel;
+
+        if (magicAttack) {
+            attackStat = bot.getTotalMagic();
+            accuracy = formulas.getTotalMagicAccuracy(bot);
+            maxDmg = (int) Math.max(1L, formulas.magicDamageBase(attackStat, bot.getTotalInt()));
+            minDmg = (int) Math.max(1L, formulas.magicDamageBaseMin(attackStat, bot.getTotalInt(), 0.1d));
+            attackLabel = "matk";
+            accuracyLabel = "magic acc";
+        } else {
+            attackStat = bot.getTotalWatk();
+            accuracy = formulas.getTotalAccuracy(bot);
+            maxDmg = Math.max(1, bot.calculateMaxBaseDamage(attackStat));
+            minDmg = Math.max(1, bot.calculateMinBaseDamage(attackStat));
+            attackLabel = "watk";
+            accuracyLabel = "acc";
+        }
+
+        String report = String.format("my dmg is %d-%d, %s %d, %s %d",
+                minDmg, maxDmg, attackLabel, attackStat, accuracyLabel, accuracy);
+        if (hitProfile == null) {
+            return report;
+        }
+
+        double hitChance = magicAttack
+                ? formulas.calculateMagicMobHitChance(accuracy, bot.getLevel(), hitProfile.mobLevel(), hitProfile.mobAvoid())
+                : formulas.calculatePhysicalMobHitChance(accuracy, bot.getLevel(), hitProfile.mobLevel(), hitProfile.mobAvoid());
+        int hitPercent = (int) Math.round(hitChance * 100.0d);
+        return String.format("%s | hit %d%% vs hardest mob (avd %d)", report, hitPercent, hitProfile.mobAvoid());
     }
 
     private static void reportMovementStats(BotEntry entry, Character bot) {
@@ -941,6 +1224,23 @@ public class BotChatManager {
         queueBotSay(entry, buildMesoReport(bot.getMeso()));
     }
 
+    private static void reportExp(BotEntry entry, Character bot) {
+        queueBotSay(entry, buildExpReport(bot.getExp(), bot.getLevel()));
+    }
+
+    static String buildExpReport(int currentExp, int level) {
+        int needed = ExpTable.getExpNeededForLevel(level);
+        if (needed <= 0) {
+            return "0%";
+        }
+        double pct = (currentExp / (double) needed) * 100.0;
+        String formatted = String.format(Locale.ROOT, "%.2f", pct);
+        if (formatted.contains(".")) {
+            formatted = formatted.replaceAll("0+$", "").replaceAll("\\.$", "");
+        }
+        return formatted + "%";
+    }
+
     private static void reportInventorySlots(BotEntry entry, Character bot) {
         queueBotSay(entry, BotInventoryManager.slotsReport(bot));
     }
@@ -959,6 +1259,10 @@ public class BotChatManager {
     private static void reportPotions(BotEntry entry, Character bot) {
         int[] counts = BotPotionManager.countPotions(bot);
         queueBotSay(entry, buildPotionReport(counts[0], counts[1]));
+    }
+
+    private static void reportPotDebug(BotEntry entry, Character bot) {
+        queueBotSay(entry, BotPotionManager.autopotDebugReport(bot));
     }
 
     static String buildPotionReport(int hp, int mp) {
@@ -1107,9 +1411,10 @@ public class BotChatManager {
     }
 
     private static void reportHelp(BotEntry entry) {
-        queueBotSay(entry, "commands: follow, stop, move here, fidget, grind, stats, speed, skills, inventory, mesos, slots, scrolls, pots, debug stats, crit, respec, respec ap");
+        queueBotSay(entry, "commands: follow, stop, move here, fidget, grind, stats, speed, skills, inventory, mesos, exp, slots, scrolls, pots, debug stats, crit, respec, respec ap");
         queueBotSay(entry, "support: support on/off, heals on/off, buff on/off, buff cheap/max, buff debug, skill buff debug");
         queueBotSay(entry, "gear: ask 'any upgrades?' or say 'trade recommended gear'");
+        queueBotSay(entry, "supplies: need hp pot, need mp pot, need pot, need ammo");
         queueBotSay(entry, "trade: mesos, scrolls, pots, equips, etc, or named items");
     }
 
@@ -1119,6 +1424,26 @@ public class BotChatManager {
 
     static boolean isApRespecCommand(String message) {
         return AP_RESPEC_PATTERN.matcher(message).find();
+    }
+
+    static boolean isFarmHereCommand(String message) {
+        return matchesWholeCommand(FARM_HERE_PATTERN, message);
+    }
+
+    static boolean isMoveHereCommand(String message) {
+        return matchesWholeCommand(MOVE_HERE_PATTERN, message);
+    }
+
+    static boolean isFollowCommand(String message) {
+        return matchesWholeCommand(FOLLOW_PATTERN, message);
+    }
+
+    static boolean isGrindCommand(String message) {
+        return matchesWholeCommand(GRIND_PATTERN, message);
+    }
+
+    static boolean isStopCommand(String message) {
+        return matchesWholeCommand(STOP_PATTERN, message);
     }
 
     private static void handleApBuildSelection(BotEntry entry, String message) {
@@ -1277,8 +1602,56 @@ public class BotChatManager {
         return expressions[ThreadLocalRandom.current().nextInt(expressions.length)];
     }
 
+    static boolean isNeedHpPotCommand(String message) {
+        return NEED_HP_POT_PATTERN.matcher(message).find();
+    }
+
+    static boolean isNeedMpPotCommand(String message) {
+        return NEED_MP_POT_PATTERN.matcher(message).find();
+    }
+
+    static boolean isNeedPotCommand(String message) {
+        return NEED_POT_PATTERN.matcher(message).find();
+    }
+
+    static boolean isNeedAmmoCommand(String message) {
+        return NEED_AMMO_PATTERN.matcher(message).find();
+    }
+
     private static void handleRequestUpgradeCommand(BotEntry entry, Character bot) {
         BotOfferManager.requestBestUpgradeFromOwner(entry, bot);
+    }
+
+    private static void handleNeedAnyPotionCommand(BotEntry entry) {
+        if (entry.owner == null) {
+            return;
+        }
+        int[] pots = BotPotionManager.countPotions(entry.owner);
+        handleNeedPotionCommand(entry, pots[0] <= pots[1]);
+    }
+
+    private static void handleNeedPotionCommand(BotEntry entry, boolean forHp) {
+        BotPotionManager.OwnerPotShareResult result = BotPotionManager.offerPotShareToOwner(entry, forHp);
+        if (result == BotPotionManager.OwnerPotShareResult.NO_DONOR) {
+            String type = forHp ? "hp" : "mp";
+            queueBotSay(entry, String.format(BotManager.randomReply(OWNER_POT_SHORTAGE_REPLIES), type));
+        }
+    }
+
+    private static void handleNeedAmmoCommand(BotEntry entry) {
+        Character owner = entry.owner;
+        if (owner == null) {
+            return;
+        }
+        WeaponType weaponType = BotAttackExecutionProvider.getEquippedWeaponType(owner);
+        if (weaponType != WeaponType.BOW && weaponType != WeaponType.CROSSBOW) {
+            queueBotSay(entry, BotManager.randomReply(AMMO_NOT_NEEDED_REPLIES));
+            return;
+        }
+        BotAmmoManager.OwnerAmmoShareResult result = BotAmmoManager.offerAmmoShareToOwner(entry, weaponType);
+        if (result == BotAmmoManager.OwnerAmmoShareResult.NO_DONOR) {
+            queueBotSay(entry, BotManager.randomReply(OWNER_AMMO_SHORTAGE_REPLIES));
+        }
     }
 
     private static void handleSkillTreeChoice(BotEntry entry, Character bot, String message) {
@@ -1520,9 +1893,25 @@ public class BotChatManager {
                 entry.pendingAction = "item_choice";
                 entry.pendingDropCategory = category;
                 BotManager.after(BotManager.randMs(500, 700), () ->
-                        BotManager.getInstance().botSay(entry.bot, dropOrTradePrompt(category)));
+                        BotManager.getInstance().botSay(entry.bot, dropOrTradePrompt(
+                                category, BotInventoryManager.countTransferableItems(category, entry, entry.bot))));
             }
         }
+    }
+
+    private static void handleItemQuery(BotEntry entry, String itemName) {
+        String category = "name:" + itemName;
+        int count = BotInventoryManager.countTransferableItems(category, entry, entry.bot);
+        if (count <= 0) {
+            BotManager.after(BotManager.randMs(500, 700), () ->
+                    BotManager.getInstance().botSay(entry.bot, BotInventoryManager.noItemsReply(category)));
+            return;
+        }
+
+        entry.pendingAction = "item_choice";
+        entry.pendingDropCategory = category;
+        BotManager.after(BotManager.randMs(500, 700), () ->
+                BotManager.getInstance().botSay(entry.bot, dropOrTradePrompt(category, count)));
     }
 
     private static TransferCommand matchTransferCommand(String message) {
@@ -1539,6 +1928,22 @@ public class BotChatManager {
         return null;
     }
 
+    static String matchItemQuery(String message) {
+        Matcher matcher = ITEM_QUERY_PATTERN.matcher(message);
+        if (!matcher.find()) {
+            return null;
+        }
+        String itemName = BotInventoryManager.normalizeItemQuery(matcher.group(1));
+        if (itemName.isBlank()) {
+            return null;
+        }
+        String generic = itemName.toLowerCase(Locale.ROOT);
+        if (generic.equals("pot") || generic.equals("potion")) {
+            return null;
+        }
+        return itemName;
+    }
+
     static String matchTradeCategory(String message) {
         String mesoCategory = matchTradeMesoCategory(message);
         if (mesoCategory != null) return mesoCategory;
@@ -1550,9 +1955,29 @@ public class BotChatManager {
         if (TRADE_USE_COMMAND_PATTERN.matcher(message).find()) return "use";
         if (TRADE_EQUIPS_COMMAND_PATTERN.matcher(message).find()) return "equips";
         if (TRADE_ETC_COMMAND_PATTERN.matcher(message).find()) return "etc";
+        Matcher viewSlotMatcher = TRADE_VIEW_SLOT_COMMAND_PATTERN.matcher(message);
+        if (viewSlotMatcher.find()) return "name:" + BotInventoryManager.normalizeItemQuery(viewSlotMatcher.group(1));
 
         Matcher matcher = TRADE_ITEM_COMMAND_PATTERN.matcher(message);
-        return matcher.find() ? "name:" + matcher.group(1).trim() : null;
+        return matcher.find() ? "name:" + BotInventoryManager.normalizeItemQuery(matcher.group(1)) : null;
+    }
+
+    static String matchFollowTarget(String message) {
+        Matcher matcher = FOLLOW_TARGET_PATTERN.matcher(message);
+        if (!matcher.find()) {
+            return null;
+        }
+
+        String target = matcher.group(1);
+        if (target == null) {
+            return null;
+        }
+
+        String normalized = target.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "me", "here", "pls", "please", "now" -> null;
+            default -> target.trim();
+        };
     }
 
     private static String matchTradeMesoCategory(String message) {
@@ -1625,7 +2050,7 @@ public class BotChatManager {
         if (DROP_EQUIPS_COMMAND_PATTERN.matcher(message).find()) return "equips";
         if (DROP_ETC_COMMAND_PATTERN.matcher(message).find()) return "etc";
         Matcher dropMatcher = DROP_ITEM_COMMAND_PATTERN.matcher(message);
-        if (dropMatcher.find()) return "name:" + dropMatcher.group(1).trim();
+        if (dropMatcher.find()) return "name:" + BotInventoryManager.normalizeItemQuery(dropMatcher.group(1));
 
         if (ASK_SCROLLS_COMMAND_PATTERN.matcher(message).find()) return "scrolls";
         if (ASK_POTS_COMMAND_PATTERN.matcher(message).find()) return "pots";
@@ -1635,27 +2060,28 @@ public class BotChatManager {
         if (ASK_ETC_COMMAND_PATTERN.matcher(message).find()) return "etc";
 
         Matcher matcher = ASK_ITEM_COMMAND_PATTERN.matcher(message);
-        return matcher.find() ? "name:" + matcher.group(1).trim() : null;
+        return matcher.find() ? "name:" + BotInventoryManager.normalizeItemQuery(matcher.group(1)) : null;
     }
 
     private static final String[] DROP_OR_TRADE_PROMPTS = {
-        "ok, giving you my %s - drop or trade?",
-        "sure! %s - drop or trade?",
-        "got it, %s - drop or trade?",
-        "just to confirm, drop or trade my %s?",
-        "dropping or trading my %s?",
+        "got %s, want me to trade or drop?",
+        "i have %s, trade or drop?",
+        "sure, %s - trade or drop?",
+        "just to confirm, trade or drop my %s?",
+        "want me to trade or drop %s?",
     };
 
-    private static String dropOrTradePrompt(String category) {
-        String what = switch (category) {
+    private static String dropOrTradePrompt(String category, int count) {
+        String base = switch (category) {
             case "scrolls" -> "scrolls";
             case "pots"    -> "pots";
             case "buff"    -> "buff pots";
             case "use"     -> "use items";
             case "equips"  -> "equips";
             case "etc"     -> "etc items";
-            default        -> category.startsWith("name:") ? "'" + category.substring(5) + "'" : "those items";
+            default        -> category.startsWith("name:") ? category.substring(5) : "those items";
         };
+        String what = count > 0 ? count + " " + base : base;
         String fmt = DROP_OR_TRADE_PROMPTS[ThreadLocalRandom.current().nextInt(DROP_OR_TRADE_PROMPTS.length)];
         return String.format(fmt, what);
     }

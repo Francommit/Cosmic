@@ -17,7 +17,10 @@
       "Bash(find /d/GameServers/Maplestory/OpenStory -type d -name *ot*)",
       "Bash(mvnw.cmd compile:*)",
       "Bash(cmd /c \"mvnw.cmd compile -q 2>&1\")",
-      "Bash(cmd:*)"
+      "Bash(cmd:*)",
+      "WebSearch",
+      "Read(//tmp/**)",
+      "Bash(/c/apache-maven/bin/mvn compile *)"
     ]
   }
 }
